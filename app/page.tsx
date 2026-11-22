@@ -1,69 +1,334 @@
-import Image from "next/image";
+"use client";
+
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { span } from "framer-motion/client";
+
+type Player = "X" | "O";
+type Cell = Player | null;
+type Mode = "pvp" | "bot";
+
+const LINES = [
+  [0, 1, 2],
+  [3, 4, 5],
+  [6, 7, 8],
+  [0, 3, 6],
+  [1, 4, 7],
+  [2, 5, 8],
+  [0, 4, 8],
+  [2, 4, 6],
+];
+
+function getWinner(board: Cell[]): Player | null {
+  for (const [a, b, c] of LINES) {
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+      return board[a];
+    }
+  }
+  return null;
+}
+
+function getWinningLine(board: Cell[]): number[] | null {
+  for (const line of LINES) {
+    const [a, b, c] = line;
+    if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+      return line;
+    }
+  }
+  return null;
+}
+
+const CELL = 96;
+const GAP = 8;
+function center(index: number) {
+  const row = Math.floor(index / 3);
+  const col = index % 3;
+  return {
+    x: col * (CELL + GAP) + CELL / 2,
+    y: row * (CELL + GAP) + CELL / 2,
+  };
+}
+
+function minimax(board: Cell[], turn: Player, bot: Player): number {
+  const winner = getWinner(board);
+  if (winner === bot) return 1;
+  if (winner) return -1;
+  if (board.every((c) => c !== null)) return 0;
+
+  const human: Player = bot === "X" ? "O" : "X";
+  const nextTurn: Player = turn === bot ? human : bot;
+  const scores: number[] = [];
+
+  board.forEach((cell, i) => {
+    if (cell === null) {
+      const next = [...board];
+      next[i] = turn;
+      scores.push(minimax(next, nextTurn, bot));
+    }
+  });
+
+  return turn === bot ? Math.max(...scores) : Math.min(...scores);
+}
+
+function bestMove(board: Cell[], bot: Player): number {
+  const human: Player = bot === "X" ? "O" : "X";
+  let bestScore = -Infinity;
+  let move = -1;
+
+  board.forEach((cell, i) => {
+    if (cell === null) {
+      const next = [...board];
+      next[i] = bot;
+      const score = minimax(next, human, bot);
+      if (score > bestScore) {
+        bestScore = score;
+        move = i;
+      }
+    }
+  });
+
+  return move;
+}
 
 export default function Home() {
+  const [board, setBoard] = useState<Cell[]>(Array(9).fill(null));
+  const [current, setCurrent] = useState<Player>("X");
+  const [mode, setMode] = useState<Mode | null>(null);
+  const [humanMark, setHumanMark] = useState<Player | null>(null);
+  const [scores, setScores] = useState({ X: 0, Draw: 0, O: 0 });
+  const [counted, setCounted] = useState(false);
+
+  const botMark: Player | null =
+    humanMark === null ? null : humanMark === "X" ? "O" : "X";
+  const winner = getWinner(board);
+  const isDraw = !winner && board.every((c) => c !== null);
+  const gameOver = winner !== null || isDraw;
+  const winningLine = getWinningLine(board);
+
+  useEffect(() => {
+    if (mode !== "bot" || !botMark || current !== botMark || gameOver) return;
+
+    const timer = setTimeout(() => {
+      const move = bestMove(board, botMark);
+      const newBoard = [...board];
+      newBoard[move] = botMark;
+      setBoard(newBoard);
+      setCurrent(botMark === "X" ? "O" : "X");
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [board, current, mode, botMark, gameOver]);
+
+  function handleClick(index: number) {
+    if (!mode) return;
+    if (mode === "bot" && !humanMark) return;
+    if (gameOver || board[index] !== null) return;
+    if (mode === "bot" && current === botMark) return;
+
+    const newBoard = [...board];
+    newBoard[index] = current;
+    setBoard(newBoard);
+    setCurrent(current === "X" ? "O" : "X");
+  }
+
+  useEffect(() => {
+    if (!gameOver || counted) return;
+
+    setScores((prev) =>
+      winner
+        ? { ...prev, [winner]: prev[winner] + 1 }
+        : { ...prev, Draw: prev.Draw + 1 },
+    );
+    setCounted(true);
+  }, [gameOver, counted, winner]);
+
+  function newGame() {
+    setBoard(Array(9).fill(null));
+    setCurrent("X");
+    setMode(null);
+    setHumanMark(null);
+    setCounted(false);
+  }
+
+  function resetAll() {
+    setBoard(Array(9).fill(null));
+    setCurrent("X");
+    setMode(null);
+    setHumanMark(null);
+    setCounted(false);
+    setScores({ X: 0, Draw: 0, O: 0 });
+  }
+
+  let status = `Turn: ${current}`;
+  if (winner) status = `Winner: ${winner}`;
+  else if (isDraw) status = "It's a draw!";
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <main className="flex min-h-screen flex-col items-center justify-center gap-6 text-white">
+      <h1 className="text-3xl font-bold">Tic-Tac-Toe</h1>
+
+      {mode === null && (
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-lg">Choose game mode:</p>
+          <div className="flex gap-3">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setMode("pvp")}
+              className="rounded-lg border-2 border-gray-400 px-5 py-2 font-bold"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              2 Players
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setMode("bot")}
+              className="rounded-lg border-2 border-gray-400 px-5 py-2 font-bold"
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              Vs Bot
+            </motion.button>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      )}
+
+      {mode === "bot" && humanMark === null && (
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-lg">Choose your mark (X goes first):</p>
+          <div className="flex gap-3">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setHumanMark("X")}
+              className="rounded-lg border-2 border-gray-400 px-6 py-2 text-2xl font-bold"
+            >
+              X
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setHumanMark("O")}
+              className="rounded-lg border-2 border-gray-400 px-6 py-2 text-2xl font-bold"
+            >
+              O
+            </motion.button>
+          </div>
+        </div>
+      )}
+
+      {mode !== null && (mode === "pvp" || humanMark !== null) && (
+        <AnimatePresence mode="wait">
+          <motion.p
+            key={status}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.2 }}
+            className="text-lg"
           >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+            {status}
+          </motion.p>
+        </AnimatePresence>
+      )}
+
+      <div className="relative">
+        <div className="grid grid-cols-3 gap-2">
+          {board.map((cell, index) => (
+            <motion.button
+              key={index}
+              onClick={() => handleClick(index)}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              animate={
+                winningLine?.includes(index)
+                  ? { scale: [1, 1.12, 1, 1.12, 1] }
+                  : { scale: 1 }
+              }
+              transition={{
+                duration: 0.6,
+                delay: winningLine?.includes(index) ? 0.4 : 0,
+              }}
+              className={`flex h-24 w-24 items-center justify-center rounded-lg border-2 text-4xl font-bold ${
+                winningLine?.includes(index)
+                  ? "border-red-500 text-red-400"
+                  : "border-gray-400 text-white"
+              }`}
+            >
+              {cell && (
+                <motion.span
+                  initial={{ scale: 0, rotate: -20, opacity: 0 }}
+                  animate={{ scale: 1, rotate: 0, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                >
+                  {cell}
+                </motion.span>
+              )}
+            </motion.button>
+          ))}
+        </div>
+
+        {winningLine && (
+          <svg
+            className="pointer-events-none absolute inset-0"
+            width={304}
+            height={304}
+            viewBox="0 0 304 304"
+          >
+            <motion.line
+              x1={center(winningLine[0]).x}
+              y1={center(winningLine[0]).y}
+              x2={center(winningLine[2]).x}
+              y2={center(winningLine[2]).y}
+              stroke="#ef4444"
+              strokeWidth="8"
+              strokeLinecap="round"
+              pathLength="1"
+              className="win-line"
+              initial={{ pathLength: 0 }}
+              animate={{ pathLength: 1 }}
+              transition={{ duration: 0.4, ease: "easeOut" }}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </svg>
+        )}
+      </div>
+      <div className="flex gap-4 text-center mt-5">
+        <div className="w-24 rounded-lg border-2 border-gray-400 px-3 py-2">
+          <p className="text-sm">X Score</p>
+          <p className="text-2xl font-bold">{scores.X}</p>
         </div>
-      </main>
-    </div>
+        <div className="w-24 rounded-lg border-2 border-gray-400 px-3 py-2">
+          <p className="text-sm">Draw</p>
+          <p className="text-2xl font-bold">{scores.Draw}</p>
+        </div>
+        <div className="w-24 rounded-lg border-2 border-gray-400 px-3 py-2">
+          <p className="text-sm">O Score</p>
+          <p className="text-2xl font-bold">{scores.O}</p>
+        </div>
+      </div>
+
+      <div className="flex flex-row items-center gap-3">
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={newGame}
+          className="rounded-lg bg-white px-5 py-2 font-bold text-black"
+        >
+          New Game
+        </motion.button>
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={resetAll}
+          className="rounded-lg bg-black border border-white px-5 py-2 font-bold text-white"
+        >
+          Reset All
+        </motion.button>
+      </div>
+
+      <div className="flex text-center">
+        <p className="text-sm text-gray-700">
+          Built with React 19, next.JS, and tailwindCSS
+        </p>
+      </div>
+    </main>
   );
 }
