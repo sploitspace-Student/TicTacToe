@@ -4,6 +4,11 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 First, run the development server:
 
+To install The project
+```bash
+git clone https://github.com/sploitspace-Student/TicTacToe.git
+```
+
 ```bash
 npm run dev
 # or
@@ -13,6 +18,14 @@ pnpm dev
 # or
 bun dev
 ```
+
+## Description
+
+I did not build this game entirely on my own skills. I asked AI coding tool for help.
+
+What I built in this project is the logic, and I used AI to help me refine the animations.
+
+## Link
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
